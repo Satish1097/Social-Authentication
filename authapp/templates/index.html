@@ -1,0 +1,40 @@
+{% load socialaccount %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <meta name="google-signin-client_id" content="{{
+        796632728475-jbjf0sf83ia66lp42hf9ajoer7fbcuut.apps.googleusercontent.com}}">
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+</head>
+
+<body>
+    <h1>Login with Google</h1>
+    <a href="{% provider_login_url 'google' %}">Sign up with Google</a>
+    <div class="g_id_signin" data-type="standard" data-onsuccess="onSignIn"></div>
+
+    <script>
+        function onSignIn(googleUser) {
+            const id_token = googleUser.getAuthResponse().id_token;
+            console.log("ID Token: ", id_token);
+
+            // Send the ID token to your backend
+            fetch("/auth/google/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ token: id_token })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Response from backend:", data);
+                });
+        }
+    </script>
+</body>
+
+</html>
