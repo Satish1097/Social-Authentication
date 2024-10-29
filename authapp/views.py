@@ -14,6 +14,12 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from authapp.serializers import *
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 
 class VerifyAPIView(GenericAPIView):
@@ -23,80 +29,59 @@ class VerifyAPIView(GenericAPIView):
         email = request.data.get("email")
         mobile = request.data.get("mobile")
 
-        if not email and not mobile:
-            return Response(
-                {"error": "Enter Valid Data"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check if user with provided email or mobile already exists
-        if email:
-            if User.objects.filter(email=email).exists():
-                return Response(
-                    "Email already exists", status=status.HTTP_400_BAD_REQUEST
-                )
-        if mobile:
-            if User.objects.filter(mobile=mobile).exists():
-                return Response(
-                    "Mobile number already exists", status=status.HTTP_400_BAD_REQUEST
-                )
-
-        # Check if OTP has already been verified
-        otp_record = (
-            OTP.objects.filter(email=email).first()
-            if email
-            else OTP.objects.filter(mobile=mobile).first()
-        )
-        if otp_record and otp_record.is_verified:
-            return Response(
-                "Email or mobile is already verified", status=status.HTTP_200_OK
-            )
-
-        # Generate a new secret key and OTP
-        secret_key = pyotp.random_base32()
+        # Generate a new secret key and Time based OTP instance
+        secret_key = pyotp.random_base32()  # Base32-encoded secret key
         totp = pyotp.TOTP(secret_key, interval=120)
+        # Generate a 6-digit OTP
         otp = totp.now()
-
         if email:
             try:
+                user = User.objects.get(email=email)
+                return Response("Email already exists")
+            except User.DoesNotExist:
                 subject = "Your OTP Code"
                 message = f"Your OTP is {otp}"
                 from_email = settings.EMAIL_HOST_USER
-                send_mail(subject, message, from_email, [email], fail_silently=False)
-
+                # Send the email
+                send_mail(
+                    subject,
+                    message,
+                    from_email,
+                    [email],
+                    fail_silently=False,
+                )
+                # Save the OTP record
                 otp_record, _ = OTP.objects.get_or_create(email=email)
                 otp_record.secret_key = secret_key
                 otp_record.is_used = False
                 otp_record.save()
 
                 return Response(
-                    {"message": "OTP sent to your email"}, status=status.HTTP_200_OK
+                    {"message": "OTP sent on your mail"}, status=status.HTTP_200_OK
                 )
-            except Exception as e:
-                return Response(
-                    {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
         elif mobile:
             try:
+                user = User.objects.get(mobile=mobile)
+                return Response("Mobile already exists")
+            except User.DoesNotExist:
                 client = Client(os.getenv("account_sid"), os.getenv("auth_token"))
                 message = client.messages.create(
                     body=f"Your OTP is {otp}",
-                    from_=os.getenv("Twilio_Number"),
+                    from_=os.getenv(
+                        "Twilio_Number"
+                    ),  # Twilio phone number bought using trial amount
                     to=f"+91{mobile}",
                 )
-
+                # Save the secret key for verification later
                 otp_record, _ = OTP.objects.get_or_create(mobile=mobile)
                 otp_record.secret_key = secret_key
                 otp_record.is_used = False
                 otp_record.save()
-
                 return Response(
-                    {"message": "OTP sent to your mobile"}, status=status.HTTP_200_OK
+                    {"message": "OTP sent successfully"}, status=status.HTTP_200_OK
                 )
-            except Exception as e:
-                return Response(
-                    {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+        else:
+            return Response("Enter mobile or email")
 
 
 class VerifyOTPAPIView(GenericAPIView):
@@ -106,39 +91,43 @@ class VerifyOTPAPIView(GenericAPIView):
         mobile = request.data.get("mobile")
         email = request.data.get("email")
         user_otp = request.data.get("otp")
+
+        # Check for required fields
+        if not mobile and not email:
+            return Response(
+                {"error": "Either mobile or email is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not user_otp:
+            return Response(
+                {"error": "OTP is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
+            # Find the OTP record
             if mobile:
                 otp_record = OTP.objects.get(mobile=mobile, is_used=False)
             else:
                 otp_record = OTP.objects.get(email=email, is_used=False)
-        except OTP.DoesNotExist:
-            return Response(
-                {"error": "OTP not found or already used"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        if otp_record:
+            # Initialize TOTP
             totp = pyotp.TOTP(otp_record.secret_key, interval=120)
-
-            if totp.verify(
-                user_otp, valid_window=1
-            ):  # valid window add 30 second before and after in actual time to validate the otp
+            print(totp)
+            # Verify the OTP
+            if totp.verify(user_otp, valid_window=1):
                 otp_record.is_used = True
                 otp_record.is_verified = True
                 otp_record.save()
                 return Response(
-                    {
-                        "message": "OTP verified successfully",
-                    },
-                    status=status.HTTP_200_OK,
+                    {"message": "OTP verified successfully."}, status=status.HTTP_200_OK
                 )
             else:
                 return Response(
-                    {"message": "OTP verification failed"},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST
                 )
-        else:
+        except OTP.DoesNotExist:
             return Response(
-                {"error": "Invalid OTP provided"}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "OTP not found or already used."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -209,9 +198,27 @@ class RegisterationAPIView(GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class LogoutAPIView(GenericAPIView):
+
+    def post(self, request):
+        tokens = OutstandingToken.objects.filter(user_id=request.user.id)
+        for token in tokens:
+            BlacklistedToken.objects.get_or_create(token=token)
+            token.delete()
+
+        return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class ResetPasswordAPIView(GenericAPIView):
+    pass
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+
 # template to check Google Authentication working or not
 from django.shortcuts import render
-from django.http import HttpResponse
 
 
 def google_auth_test(request):
@@ -219,3 +226,7 @@ def google_auth_test(request):
         request,
         "index.html",
     )
+
+
+def profileview(request):
+    return render(request, "profile.html")

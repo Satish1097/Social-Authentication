@@ -44,7 +44,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class OTP(models.Model):
-    mobile = models.CharField(max_length=13)
+    mobile = models.CharField(max_length=13, unique=True, blank=True)
     email = models.EmailField(unique=True)
     secret_key = models.CharField(max_length=50)
     generated_at = models.DateTimeField(auto_now=True)
