@@ -20,6 +20,11 @@ from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken,
 )
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 
 
 class VerifyAPIView(GenericAPIView):
@@ -28,13 +33,12 @@ class VerifyAPIView(GenericAPIView):
     def post(self, request, *args, **kwargs):
         email = request.data.get("email")
         mobile = request.data.get("mobile")
-
         # Generate a new secret key and Time based OTP instance
         secret_key = pyotp.random_base32()  # Base32-encoded secret key
         totp = pyotp.TOTP(secret_key, interval=120)
         # Generate a 6-digit OTP
         otp = totp.now()
-        if email:
+        if email is not None:
             try:
                 user = User.objects.get(email=email)
                 return Response("Email already exists")
@@ -59,7 +63,7 @@ class VerifyAPIView(GenericAPIView):
                 return Response(
                     {"message": "OTP sent on your mail"}, status=status.HTTP_200_OK
                 )
-        elif mobile:
+        elif mobile is not None:
             try:
                 user = User.objects.get(mobile=mobile)
                 return Response("Mobile already exists")
@@ -111,7 +115,6 @@ class VerifyOTPAPIView(GenericAPIView):
                 otp_record = OTP.objects.get(email=email, is_used=False)
             # Initialize TOTP
             totp = pyotp.TOTP(otp_record.secret_key, interval=120)
-            print(totp)
             # Verify the OTP
             if totp.verify(user_otp, valid_window=1):
                 otp_record.is_used = True
@@ -162,7 +165,6 @@ class GoogleAuthAPIView(APIView):
             user, created = User.objects.get_or_create(
                 email=email, defaults={"username": ""}
             )
-
             # Generate JWT token
             refresh = RefreshToken.for_user(user)
 
@@ -199,22 +201,171 @@ class RegisterationAPIView(GenericAPIView):
 
 
 class LogoutAPIView(GenericAPIView):
-
     def post(self, request):
-        tokens = OutstandingToken.objects.filter(user_id=request.user.id)
-        for token in tokens:
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+
+        # Check if the Authorization header is present and contains the 'Bearer' token
+        if auth_header.startswith("Bearer "):
+            access = auth_header[7:]  # Remove 'Bearer ' prefix
+            print(f"Access Token: {access}")
+        else:
+            return Response(
+                {"detail": "Authorization header missing or invalid."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            # Attempt to find the UserToken using the access token
+            usertoken = UserToken.objects.get(access_token=access)
+            # Retrieve the refresh token
+            tx = usertoken.refresh_token
+            # Attempt to find the OutstandingToken using the refresh token
+            token = OutstandingToken.objects.get(token=tx)
+            # Add the token to the blacklist and delete the outstanding token
             BlacklistedToken.objects.get_or_create(token=token)
             token.delete()
+            usertoken.delete()
 
-        return Response(status=status.HTTP_205_RESET_CONTENT)
+            return Response(
+                {"detail": "Successfully logged out."},
+                status=status.HTTP_205_RESET_CONTENT,
+            )
+
+        except UserToken.DoesNotExist:
+            return Response(
+                {"detail": "Invalid access token."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except OutstandingToken.DoesNotExist:
+            return Response(
+                {"detail": "Invalid refresh token."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class ResetPasswordAPIView(GenericAPIView):
-    pass
+
+    def post(self, request):
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+
+        # Check if the Authorization header is present and contains the 'Bearer' token
+        if auth_header.startswith("Bearer "):
+            access_token = auth_header[7:]  # Remove 'Bearer ' prefix
+            return access_token
+        else:
+            # Return None or raise an error if no valid token is found
+            return None
+        access_token = request.GET.get("access_token")
+        print(access_token)
+        user = request.user
+        email = user.email
+        password = request.data.get("password")
+        new_password = request.data.get("new_password")
+        try:
+            user = User.objects.get(email=email)
+            password = user.check_password(password)
+            if password:
+                user.set_password(new_password)
+                user.save()
+                OutstandingToken.objects.filter(user=user).delete()
+                return Response(
+                    {"message": "Password Updated successfully"},
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                return Response("Invalid Credential")
+        except User.DoesNotExist:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class PasswordForgotRequestView(GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        mobile = request.data.get("mobile")
+        if mobile:
+            try:
+                user = User.objects.get(mobile=mobile)
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "User does not exist with this mobile"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif email:
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "User does not exist with this email"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            return Response(
+                {"message": "Enter mobile or email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        reset_link = f"http://127.0.0.1:8000/auth/password-reset-confirm/{uid}/{token}/"
+        if email:
+            send_mail(
+                "Password Reset",
+                f"Click the link to reset your password: {reset_link}",
+                "settings.EMAIL_HOST_USER",  # Use settings.EMAIL_HOST_USER directly
+                [email],
+            )
+            return Response(
+                {"message": "Password reset link sent on email!"},
+                status=status.HTTP_200_OK,
+            )
+        elif mobile:
+            client = Client(os.getenv("account_sid"), os.getenv("auth_token"))
+            message = client.messages.create(
+                body=f"Reset Link: {reset_link}",
+                from_=os.getenv(
+                    "Twilio_Number"
+                ),  # Twilio phone number bought using trial amount
+                to=f"+91{mobile}",
+            )
+            return Response(
+                {"message": "reset link sent on mobile!"}, status=status.HTTP_200_OK
+            )
+        else:
+            return Response(
+                {"message": "Kindly Enter mobile or email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class PasswordConfirmView(GenericAPIView):
+    serializer_class = PasswordResetConfirmSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+        try:
+            user_id = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=user_id)
+
+            if not default_token_generator.check_token(user, token):
+                return Response(
+                    {"error": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user.set_password(serializer.validated_data["password"])
+            user.save()
+
+            return Response(
+                {"message": "Password has been reset."}, status=status.HTTP_200_OK
+            )
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response(
+                {"error": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 # template to check Google Authentication working or not

@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "dj_rest_auth",  # Use dj-rest-auth for authentication
     "allauth.socialaccount.providers.google",
+    "django_extensions",
 ]
 
 MIDDLEWARE = [
@@ -49,7 +50,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # "authapp.middleware.TokenAuthenticationMiddleware",
+    # "authapp.middleware.TokenBlacklistMiddleware",
     "allauth.account.middleware.AccountMiddleware",
 ]
 
@@ -84,7 +85,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "Auth",
         "USER": "postgres",
-        "PASSWORD": "123",
+        "PASSWORD": os.getenv("Database_Password"),
         "HOST": "127.0.0.1",
         "PORT": "5432",
     }

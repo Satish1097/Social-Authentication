@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from authapp.models import *
+from authapp.models import OTP
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -30,8 +31,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         validated_data.pop("password2")
         email = validated_data.get("email")
         mobile = validated_data.get("mobile")
-        otpemail = OTP.objects.filter(email=email, is_verified=True).exists()
-        otpmobile = OTP.objects.filter(mobile=mobile, is_verified=True).exists()
+        otpemail = OTP.objects.filter(email=email, is_used=True).exists()
+        otpmobile = OTP.objects.filter(mobile=mobile, is_used=True).exists()
+        print(email)
+        print(otpemail)
+        print(otpmobile)
 
         if otpemail or otpmobile:
 
@@ -79,11 +83,16 @@ class CustomTokenObtainPairSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "No active account found with the given credentials."
             )
-
         # Generate tokens
         refresh = RefreshToken.for_user(user)
+        x = refresh.access_token
+        print(x)
+        UserToken.objects.create(refresh_token=str(refresh), access_token=str(x))
         return {
             "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user_id": user.id,  # Optional: Include user ID in response
+            "access": str(x),
         }
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)

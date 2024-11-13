@@ -44,13 +44,19 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class OTP(models.Model):
-    mobile = models.CharField(max_length=13, unique=True, blank=True)
-    email = models.EmailField(unique=True)
+    mobile = models.CharField(max_length=13, blank=True)
+    email = models.EmailField(blank=True)
     secret_key = models.CharField(max_length=50)
     generated_at = models.DateTimeField(auto_now=True)
     is_used = models.BooleanField(default=False)
-    is_verified = models.BooleanField(default=False)
 
     def __str__(self):
         info = self.email if self.email else self.mobile
         return f"OTP for {info}"
+
+
+class UserToken(models.Model):
+    refresh_token = models.CharField(
+        max_length=255, unique=True
+    )  # Unique device identifier
+    access_token = models.CharField(max_length=255, unique=True)
