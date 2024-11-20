@@ -21,6 +21,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ["email", "password", "password2", "mobile", "username"]
 
     def validate(self, attrs):
+        # Ensure the passwords match
         if attrs["password"] != attrs["password2"]:
             raise serializers.ValidationError(
                 {"password": "Password fields didn't match."}
@@ -28,27 +29,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop("password2")
-        email = validated_data.get("email")
-        mobile = validated_data.get("mobile")
-        otpemail = OTP.objects.filter(email=email, is_used=True).exists()
-        otpmobile = OTP.objects.filter(mobile=mobile, is_used=True).exists()
-        print(email)
-        print(otpemail)
-        print(otpmobile)
-
-        if otpemail or otpmobile:
-
-            user = User.objects.create(
-                email=email,
-                mobile=mobile,
-                username=validated_data.get("username", ""),
-            )
-            user.set_password(validated_data["password"])
-            user.save()
-            return user
-        else:
-            raise serializers.ValidationError("Email or phone not Validated")
+        validated_data.pop("password2")  # Remove password2 field
+        user = User.objects.create(
+            email=validated_data["email"],
+            mobile=validated_data.get("mobile"),
+            username=validated_data.get("username", ""),
+        )
+        user.set_password(validated_data["password"])
+        user.save()
+        return user
 
 
 class CustomTokenObtainPairSerializer(serializers.Serializer):
@@ -57,41 +46,16 @@ class CustomTokenObtainPairSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
+        # Only validate that mobile or email is provided
         mobile = attrs.get("mobile", None)
         email = attrs.get("email", None)
-        password = attrs.get("password")
 
         if not (mobile or email):
             raise serializers.ValidationError(
                 "Please provide either a mobile number or an email address."
             )
 
-        # Authenticate using email or mobile
-        user = None
-        if email:
-            user = authenticate(
-                request=self.context.get("request"), email=email, password=password
-            )
-        elif mobile:
-            user = authenticate(
-                request=self.context.get("request"), username=mobile, password=password
-            )  # Ensure 'username' is used here
-
-            print(user)
-
-        if user is None:
-            raise serializers.ValidationError(
-                "No active account found with the given credentials."
-            )
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
-        x = refresh.access_token
-        print(x)
-        UserToken.objects.create(refresh_token=str(refresh), access_token=str(x))
-        return {
-            "refresh": str(refresh),
-            "access": str(x),
-        }
+        return attrs
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
