@@ -1,2 +1,46 @@
+# Virtual environments
+venv/
 env/
+# Environment variables
 .env
+*.env
+
+# Byte-compiled / cached files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*/migrations/__pycache__/
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.sublime-workspace
+
+# Logs and debugging
+logs/
+*.log
+debug.log
+
+# Django
+*.sqlite3
+db.sqlite3
+instance/
+media/
+staticfiles/
+*.db
+
+
+# Pytest cache
+.pytest_cache/
+
+
+# Ignore Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Ignore Django migrations cache
+*/migrations/__pycache__/
+*.pyc
+__pycache__/

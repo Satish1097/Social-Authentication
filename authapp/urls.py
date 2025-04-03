@@ -31,4 +31,9 @@ urlpatterns = [
     path(
         "google-auth-test/", google_auth_test, name="google_auth_test"
     ),  # Serve the HTML template
+
+    path("new-user-register/", NewUserRegistrationAPIView.as_view(), name="new_user_register"),
+    path('send-otp/', NewSendOtp.as_view(), name='send_otp'),
+    path('verify-otp/', NewVerifyOTPAPIView.as_view(), name='verify_otp'),
+    path('new-login/', LoginApiView.as_view(), name='newlogin'),
 ]

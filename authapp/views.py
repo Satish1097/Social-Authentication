@@ -474,3 +474,210 @@ def google_auth_test(request):
 
 def profileview(request):
     return render(request, "profile.html")
+
+
+
+class NewUserRegistrationAPIView(GenericAPIView):
+    """
+    API view for user registration.
+
+    This view allows new users to register by providing the required details.
+    Upon successful validation, a new user account is created and returned.
+    """
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class NewSendOtp(GenericAPIView):
+    """
+    API view to send OTP to the user.
+
+    This view takes the email/mobile as input and sends a 6-digit OTP to the user.
+    The OTP is generated using the TOTP algorithm and is valid for 2 minutes.
+    The OTP is saved in the OTP table with the email/mobile and is used for verification later.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get("email")
+        mobile = request.data.get("mobile")
+        # Generate a new secret key and Time based OTP instance
+        secret_key = pyotp.random_base32()  # Base32-encoded secret key
+        totp = pyotp.TOTP(secret_key, interval=120)
+        # Generate a 6-digit OTP
+        otp = totp.now()
+        if email is not None:
+                subject = "Your OTP Code"
+                message = f"Your OTP is {otp}"
+                from_email = settings.EMAIL_HOST_USER
+                # print(os.getenv("EMAIL_HOST_USER"))
+                # print(from_email)
+                # Send the email
+                send_mail(
+                    subject,
+                    message,
+                    from_email,
+                    [email],
+                    fail_silently=False,
+                )
+                # Save the OTP record
+                otp_record, _ = OTP.objects.get_or_create(email=email)
+                otp_record.secret_key = secret_key
+                otp_record.is_used = False
+                otp_record.save()
+
+                return Response(
+                    {"message": "OTP sent to your email"}, status=status.HTTP_200_OK
+                )
+        elif mobile is not None:
+            
+                client = Client(os.getenv("account_sid"), os.getenv("auth_token"))
+                message = client.messages.create(
+                    body=f"Your OTP is {otp}",
+                    from_="+13082448501",
+                    
+                    to=f"+91{mobile}",
+                )
+                # Save the secret key for verification later
+                otp_record, _ = OTP.objects.get_or_create(mobile=mobile)
+                otp_record.secret_key = secret_key
+                otp_record.is_used = False
+                otp_record.save()
+                return Response(
+                    {"message": "OTP sent successfully to your mobile"},
+                    status=status.HTTP_200_OK,
+                )
+        else:
+            return Response(
+                {"message": "Please provide either email or mobile number"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    
+
+class NewVerifyOTPAPIView(GenericAPIView):
+    """
+    This API view is used for verifying the OTP sent to the user.
+    It takes the email/mobile and OTP as input and verifies the OTP.
+    If the OTP is valid, it marks the OTP as used and enables the email/mobile verification flag.
+    AUTHOR: Nitin Shenigaram
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        mobile = request.data.get("mobile")
+        email = request.data.get("email")
+        user_otp = request.data.get("otp")
+
+        # Check for required fields
+        if not mobile and not email:
+            return Response(
+                {"error": "Either mobile or email is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not user_otp:
+            return Response(
+                {"error": "OTP is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            if mobile:
+                otp_records = OTP.objects.filter(mobile=mobile, is_used=False)
+                user = User.objects.get(mobile=mobile)
+            else:
+                otp_records = OTP.objects.filter(email=email, is_used=False)
+                user = User.objects.get(email=email)
+            if not otp_records.exists():
+                return Response(
+                    {"error": "OTP not found or already used."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            otp_record = otp_records.first()
+            # Initialize TOTP
+            totp = pyotp.TOTP(otp_record.secret_key, interval=120)
+            new_otp = totp.now()
+            # Verify the OTP
+            if totp.verify(user_otp, valid_window=1):
+                otp_record.is_used = True
+                otp_record.save()
+                if email:
+                    user.is_email_verified = True
+                else:
+                    user.is_mobile_verified = True
+
+                user.save()
+                return Response(
+                    {"message": "OTP verified successfully."}, status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST
+                )
+        except OTP.DoesNotExist:
+            return Response(
+                {"error": "OTP not found or already used."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+class LoginApiView(APIView):
+    """
+    This API view is used for generating the JWT tokens for the user.
+    It takes the email/mobile and password as input and authenticates the user.
+    If the user is authenticated, it generates a refresh token and an access token.
+    The refresh token is used for generating a new access token when the existing one expires.
+    The access token is used for accessing the protected routes.
+
+    AUTHOR: Nitin Shenigaram
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = CustomTokenObtainPairSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        mobile = serializer.validated_data.get("mobile", None)
+        email = serializer.validated_data.get("email", None)
+        password = serializer.validated_data.get("password")
+
+        # Authenticate the user
+        user = None
+        if email:
+            user = authenticate(request=request, email=email, password=password)
+        elif mobile:
+            user = authenticate(request=request, username=mobile, password=password)
+
+        if user is None:
+            return Response(
+                {"detail": "No active account found with the given credentials."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        
+        if any([user.is_email_verified == False, user.is_mobile_verified == False]):
+            return Response(
+                {"message": "Email or mobile not verified"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Generate tokens
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+
+        # Store the tokens (optional step depending on your business logic)
+        UserToken.objects.create(
+            refresh_token=str(refresh), access_token=str(access_token)
+        )
+
+        return Response(
+            {
+                "refresh": str(refresh),
+                "access": str(access_token),
+            },
+            status=status.HTTP_200_OK,
+        )
