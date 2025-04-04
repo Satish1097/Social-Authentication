@@ -1,0 +1,208 @@
+{
+	"info": {
+		"_postman_id": "b1bf05c7-2e71-45bb-9150-ff645b331507",
+		"name": "Hackerkernel",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "36208600"
+	},
+	"item": [
+		{
+			"name": "login",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\":\"nitinshenigaram7860@gmail.com\",\n    \"password\":\"1234\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "127.0.0.1:8000/auth/new-login/"
+			},
+			"response": []
+		},
+		{
+			"name": "registration",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n            \"email\": \"nitinshenigmaram7860@gmail.com\",\n            \"mobile\":\"9172048485\",\n            \"password\": \"nitin@#123\",\n            \"password2\": \"nitin@#123\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:8000/auth/new-user-register/"
+			},
+			"response": []
+		},
+		{
+			"name": "sendotp",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\":\"nitinshenigaram7860@gmail.com\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "127.0.0.1:8000/auth/send-otp/"
+			},
+			"response": []
+		},
+		{
+			"name": "forgot password",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\":\"nitinshenigaram7860@gmail.com\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "127.0.0.1:8000/auth/password-reset/"
+			},
+			"response": []
+		},
+		{
+			"name": "confirm forgot password",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:8000/auth/password-reset-confirm/MQ/cnl2sd-1831530d301af9c0436c63bffb585d57/"
+			},
+			"response": []
+		},
+		{
+			"name": "get refresh token",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+							"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+							"    .tftable tr {background-color:#ffffff;}",
+							"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+							"    .tftable tr:hover {background-color:#e0ffff;}",
+							"</style>",
+							"",
+							"<table class=\"tftable\" border=\"1\">",
+							"    <tr>",
+							"        <th>Detail</th>",
+							"        <th>Code</th>",
+							"        <th>Token Class</th>",
+							"        <th>Token Type</th>",
+							"        <th>Message</th>",
+							"    </tr>",
+							"    ",
+							"    <tr>",
+							"        <td>{{response.detail}}</td>",
+							"        <td>{{response.code}}</td>",
+							"        <td>{{response.messages.[0].token_class}}</td>",
+							"        <td>{{response.messages.[0].token_type}}</td>",
+							"        <td>{{response.messages.[0].message}}</td>",
+							"    </tr>",
+							"</table>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return {response: pm.response.json()}",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTA3NDQ5LCJpYXQiOjE3NDM1MDI2NDksImp0aSI6Ijg0ZDE4NjAxYmNhYzQwYWJhYzBhNjE3ZDVkMTVkOTU4IiwidXNlcl9pZCI6MX0.RT-2ON9QsC1v5wcGco5Gsf3IHBNj86O70mW4Qqlnj2Q",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"refresh\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0NDEwNzQ0OSwiaWF0IjoxNzQzNTAyNjQ5LCJqdGkiOiI2OTVhOTEzYjU1Zjk0NjAyOTBjZWFiZWIxNGNhZGYwNyIsInVzZXJfaWQiOjF9.uXTzgaPxSptQ_lWb-1OuJEQELqpkrVjnQMNjEg3d9a8\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:8000/auth/token/refresh/"
+			},
+			"response": []
+		},
+		{
+			"name": "reset password",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTExNzg0LCJpYXQiOjE3NDM1MDY5ODQsImp0aSI6IjAzODJlNmE3YjEwNTQ0YzRhZTE5YWI5ZGJiM2I4MTc2IiwidXNlcl9pZCI6MX0.r-xONzu1x8KdESfsV864pseAxgbjDavTWF1MAKD7iqU",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "127.0.0.1:8000/auth/reset_password/"
+			},
+			"response": []
+		},
+		{
+			"name": "logout",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTE5NzI4LCJpYXQiOjE3NDM1MTQ5MjgsImp0aSI6IU2MDlkNjY3ZGVhZjQ5YTBiZTU3MmE4ZjVjNmY0M2Q4IiwidXNlcl9pZCI6MX0.DDQT9VzFRn2oGpjSBVbmdrope2B3YYgZcY4eDLk87tE",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": "127.0.0.1:8000/auth/logout/"
+			},
+			"response": []
+		}
+	]
+}
